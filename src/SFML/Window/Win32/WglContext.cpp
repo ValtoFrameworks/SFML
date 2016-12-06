@@ -149,7 +149,7 @@ WglContext::~WglContext()
     if (m_context)
     {
         if (wglGetCurrentContext() == m_context)
-            wglMakeCurrent(NULL, NULL);
+            wglMakeCurrent(wglGetCurrentDC(), NULL);
         wglDeleteContext(m_context);
     }
 
@@ -202,7 +202,16 @@ GlFunctionPointer WglContext::getFunction(const char* name)
 ////////////////////////////////////////////////////////////
 bool WglContext::makeCurrent(bool current)
 {
-    return m_deviceContext && m_context && wglMakeCurrent(current ? m_deviceContext : NULL, current ? m_context : NULL);
+    if (!m_deviceContext || !m_context)
+        return false;
+
+    if (wglMakeCurrent(m_deviceContext, current ? m_context : NULL) == FALSE)
+    {
+        err() << "Failed to " << (current ? "activate" : "deactivate") << " OpenGL context: " << getErrorString(GetLastError()).toAnsiString() << std::endl;
+        return false;
+    }
+
+    return true;
 }
 
 
@@ -223,7 +232,7 @@ void WglContext::setVerticalSyncEnabled(bool enabled)
     if (sfwgl_ext_EXT_swap_control == sfwgl_LOAD_SUCCEEDED)
     {
         if (wglSwapIntervalEXT(enabled ? 1 : 0) == FALSE)
-            err() << "Setting vertical sync failed" << std::endl;
+            err() << "Setting vertical sync failed: " << getErrorString(GetLastError()).toAnsiString() << std::endl;
     }
     else
     {
@@ -258,9 +267,12 @@ int WglContext::selectBestPixelFormat(HDC deviceContext, unsigned int bitsPerPix
         };
 
         // Let's check how many formats are supporting our requirements
-        int   formats[512];
-        UINT  nbFormats;
-        bool  isValid = wglChoosePixelFormatARB(deviceContext, intAttributes, NULL, 512, formats, &nbFormats) != 0;
+        int  formats[512];
+        UINT nbFormats;
+        bool isValid = wglChoosePixelFormatARB(deviceContext, intAttributes, NULL, 512, formats, &nbFormats) != FALSE;
+
+        if (!isValid)
+            err() << "Failed to enumerate pixel formats: " << getErrorString(GetLastError()).toAnsiString() << std::endl;
 
         // Get the best format among the returned ones
         if (isValid && (nbFormats > 0))
@@ -409,14 +421,19 @@ void WglContext::updateSettingsFromPixelFormat()
 {
     int format = GetPixelFormat(m_deviceContext);
 
+    if (format == 0)
+    {
+        err() << "Failed to get selected pixel format: " << getErrorString(GetLastError()).toAnsiString() << std::endl;
+        return;
+    }
+
     PIXELFORMATDESCRIPTOR actualFormat;
     actualFormat.nSize    = sizeof(actualFormat);
     actualFormat.nVersion = 1;
-    DescribePixelFormat(m_deviceContext, format, sizeof(actualFormat), &actualFormat);
 
-    if (format == 0)
+    if (DescribePixelFormat(m_deviceContext, format, sizeof(actualFormat), &actualFormat) == 0)
     {
-        err() << "Failed to get selected pixel format" << std::endl;
+        err() << "Failed to retrieve pixel format information: " << getErrorString(GetLastError()).toAnsiString() << std::endl;
         return;
     }
 
@@ -507,9 +524,15 @@ void WglContext::createSurface(WglContext* shared, unsigned int width, unsigned 
 
                 if (!m_deviceContext)
                 {
+                    err() << "Failed to retrieve pixel buffer device context: " << getErrorString(GetLastError()).toAnsiString() << std::endl;
+
                     wglDestroyPbufferARB(m_pbuffer);
                     m_pbuffer = NULL;
                 }
+            }
+            else
+            {
+                err() << "Failed to create pixel buffer: " << getErrorString(GetLastError()).toAnsiString() << std::endl;
             }
         }
     }
@@ -604,7 +627,7 @@ void WglContext::createContext(WglContext* shared)
                 static Mutex mutex;
                 Lock lock(mutex);
 
-                if (!wglMakeCurrent(NULL, NULL))
+                if (!wglMakeCurrent(wglGetCurrentDC(), NULL))
                 {
                     err() << "Failed to deactivate shared context before sharing: " << getErrorString(GetLastError()).toAnsiString() << std::endl;
                     return;
@@ -669,7 +692,7 @@ void WglContext::createContext(WglContext* shared)
             static Mutex mutex;
             Lock lock(mutex);
 
-            if (!wglMakeCurrent(NULL, NULL))
+            if (!wglMakeCurrent(wglGetCurrentDC(), NULL))
             {
                 err() << "Failed to deactivate shared context before sharing: " << getErrorString(GetLastError()).toAnsiString() << std::endl;
                 return;
