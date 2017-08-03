@@ -22,37 +22,47 @@
 //
 ////////////////////////////////////////////////////////////
 
-#ifndef SFML_SFML_WINDOW_HPP
-#define SFML_SFML_WINDOW_HPP
-
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
+#include <SFML/Window/OSX/ClipboardImpl.hpp>
 
-#include <SFML/System.hpp>
-#include <SFML/Window/Clipboard.hpp>
-#include <SFML/Window/Context.hpp>
-#include <SFML/Window/ContextSettings.hpp>
-#include <SFML/Window/Cursor.hpp>
-#include <SFML/Window/Event.hpp>
-#include <SFML/Window/Joystick.hpp>
-#include <SFML/Window/Keyboard.hpp>
-#include <SFML/Window/Mouse.hpp>
-#include <SFML/Window/Sensor.hpp>
-#include <SFML/Window/Touch.hpp>
-#include <SFML/Window/VideoMode.hpp>
-#include <SFML/Window/Window.hpp>
-#include <SFML/Window/WindowHandle.hpp>
-#include <SFML/Window/WindowStyle.hpp>
+#import <AppKit/AppKit.h>
 
-
-
-#endif // SFML_SFML_WINDOW_HPP
+namespace sf
+{
+namespace priv
+{
 
 ////////////////////////////////////////////////////////////
-/// \defgroup window Window module
-///
-/// Provides OpenGL-based windows, and abstractions for
-/// events and input handling.
-///
+String ClipboardImpl::getString()
+{
+    NSPasteboard* pboard = [NSPasteboard generalPasteboard];
+    NSString* data = [pboard stringForType:NSPasteboardTypeString];
+
+    char const* utf8 = [data cStringUsingEncoding:NSUTF8StringEncoding];
+    NSUInteger length = [data lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+
+    return String::fromUtf8(utf8, utf8 + length);
+}
+
+
 ////////////////////////////////////////////////////////////
+void ClipboardImpl::setString(const String& text)
+{
+    std::basic_string<Uint8> utf8 = text.toUtf8();
+    NSString* data = [[NSString alloc] initWithBytes:utf8.data()
+                                              length:utf8.length()
+                                            encoding:NSUTF8StringEncoding];
+
+    NSPasteboard* pboard = [NSPasteboard generalPasteboard];
+    [pboard declareTypes:@[NSPasteboardTypeString] owner:nil];
+    BOOL ok = [pboard setString:data forType:NSPasteboardTypeString];
+
+    [data release];
+}
+
+} // namespace priv
+
+} // namespace sf
+

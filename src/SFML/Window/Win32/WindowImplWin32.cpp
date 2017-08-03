@@ -40,6 +40,7 @@
 #include <SFML/System/Err.hpp>
 #include <SFML/System/Utf.hpp>
 #include <vector>
+#include <cstring>
 
 // MinGW lacks the definition of some Win32 constants
 #ifndef XBUTTON1
@@ -131,7 +132,8 @@ namespace priv
 WindowImplWin32::WindowImplWin32(WindowHandle handle) :
 m_handle          (handle),
 m_callback        (0),
-m_cursor          (NULL),
+m_cursorVisible   (true), // might need to call GetCursorInfo
+m_lastCursor      (LoadCursor(NULL, IDC_ARROW)),
 m_icon            (NULL),
 m_keyRepeatEnabled(true),
 m_lastSize        (0, 0),
@@ -163,7 +165,8 @@ m_cursorGrabbed   (false)
 WindowImplWin32::WindowImplWin32(VideoMode mode, const String& title, Uint32 style, const ContextSettings& /*settings*/) :
 m_handle          (NULL),
 m_callback        (0),
-m_cursor          (NULL),
+m_cursorVisible   (true), // might need to call GetCursorInfo
+m_lastCursor      (LoadCursor(NULL, IDC_ARROW)),
 m_icon            (NULL),
 m_keyRepeatEnabled(true),
 m_lastSize        (mode.width, mode.height),
@@ -221,7 +224,7 @@ m_cursorGrabbed   (m_fullscreen)
 
         ++handleCount;
     }
-    
+
     // By default, the OS limits the size of the window the the desktop size,
     // we have to resize it after creation to apply the real size
     setSize(Vector2u(mode.width, mode.height));
@@ -238,6 +241,8 @@ m_cursorGrabbed   (m_fullscreen)
 ////////////////////////////////////////////////////////////
 WindowImplWin32::~WindowImplWin32()
 {
+    // TODO should we restore the cursor shape and visibility?
+
     // Destroy the custom icon, if any
     if (m_icon)
         DestroyIcon(m_icon);
@@ -389,12 +394,14 @@ void WindowImplWin32::setVisible(bool visible)
 ////////////////////////////////////////////////////////////
 void WindowImplWin32::setMouseCursorVisible(bool visible)
 {
-    if (visible)
-        m_cursor = LoadCursorW(NULL, IDC_ARROW);
-    else
-        m_cursor = NULL;
-
-    SetCursor(m_cursor);
+    // Don't call twice ShowCursor with the same parameter value;
+    // we don't want to increment/decrement the internal counter
+    // more than once.
+    if (visible != m_cursorVisible)
+    {
+        m_cursorVisible = visible;
+        ShowCursor(visible);
+    }
 }
 
 
@@ -403,6 +410,14 @@ void WindowImplWin32::setMouseCursorGrabbed(bool grabbed)
 {
     m_cursorGrabbed = grabbed;
     grabCursor(m_cursorGrabbed);
+}
+
+
+////////////////////////////////////////////////////////////
+void WindowImplWin32::setMouseCursor(const CursorImpl& cursor)
+{
+    m_lastCursor = cursor.m_cursor;
+    SetCursor(m_lastCursor);
 }
 
 
@@ -567,7 +582,7 @@ void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
         {
             // The mouse has moved, if the cursor is in our window we must refresh the cursor
             if (LOWORD(lParam) == HTCLIENT)
-                SetCursor(m_cursor);
+                SetCursor(m_lastCursor);
 
             break;
         }

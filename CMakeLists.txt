@@ -21,6 +21,23 @@ if(NOT CMAKE_VERSION VERSION_LESS 3.0)
     cmake_policy(SET CMP0042 NEW)
 endif()
 
+# add some default value for some additional macOS variable
+# note that those variables are ignored on other systems
+if(NOT CMAKE_OSX_ARCHITECTURES)
+    set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "macOS architecture to build; 64-bit is expected" FORCE)
+endif()
+if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.7" CACHE STRING "macOS deployement target; 10.7+ is expected" FORCE)
+endif()
+if(NOT CMAKE_OSX_SYSROOT)
+    # query the path to the default SDK, will fail on non-macOS, but it's okay.
+    execute_process(COMMAND xcodebuild -sdk macosx -version Path
+                    COMMAND head -n 1
+                    COMMAND tr -d '\n'
+                    OUTPUT_VARIABLE CMAKE_OSX_SYSROOT
+                    ERROR_QUIET)
+endif()
+
 # set Android specific options
 
 # define the minimum API level to be used
@@ -247,9 +264,13 @@ if(SFML_OS_MACOSX)
     endif()
 
     # only the default architecture (i.e. 64-bit) is supported
-    if(CMAKE_OSX_ARCHITECTURES AND NOT CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
+    if(NOT CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
         message(FATAL_ERROR "Only 64-bit architecture is supported")
-        return()
+    endif()
+
+    # Ensure macOS 10.7+ is used
+    if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS "10.7")
+        message(FATAL_ERROR "macOS 10.7 or greater is required for the deployment target.")
     endif()
 
     # configure Xcode templates
@@ -364,7 +385,7 @@ else()
     endif()
 
     # add network module headers if enabled
-    if(SFML_BUILD_GRAPHICS)
+    if(SFML_BUILD_NETWORK)
         add_custom_command(TARGET SFML POST_BUILD COMMAND cp -r
                            ${PROJECT_SOURCE_DIR}/include/SFML/Network.hpp
                            ${PROJECT_SOURCE_DIR}/include/SFML/Network
@@ -408,24 +429,26 @@ endif()
 # install 3rd-party libraries and tools
 if(SFML_OS_WINDOWS)
 
-    # install the binaries of SFML dependencies
-    if(ARCH_32BITS)
-        install(DIRECTORY extlibs/bin/x86/ DESTINATION bin)
-        if(SFML_COMPILER_MSVC AND SFML_MSVC_VERSION LESS 14)
-            install(DIRECTORY extlibs/libs-msvc/x86/ DESTINATION lib)
-        elseif(SFML_COMPILER_MSVC)
-            install(DIRECTORY extlibs/libs-msvc-universal/x86/ DESTINATION lib)
-        else()
-            install(DIRECTORY extlibs/libs-mingw/x86/ DESTINATION lib)
-        endif()
-    elseif(ARCH_64BITS)
-        install(DIRECTORY extlibs/bin/x64/ DESTINATION bin)
-        if(SFML_COMPILER_MSVC AND SFML_MSVC_VERSION LESS 14)
-            install(DIRECTORY extlibs/libs-msvc/x64/ DESTINATION lib)
-        elseif(SFML_COMPILER_MSVC)
-            install(DIRECTORY extlibs/libs-msvc-universal/x64/ DESTINATION lib)
-        else()
-            install(DIRECTORY extlibs/libs-mingw/x64/ DESTINATION lib)
+    if(NOT SFML_USE_SYSTEM_DEPS)
+        # install the binaries of SFML dependencies
+        if(ARCH_32BITS)
+            install(DIRECTORY extlibs/bin/x86/ DESTINATION bin)
+            if(SFML_COMPILER_MSVC AND SFML_MSVC_VERSION LESS 14)
+                install(DIRECTORY extlibs/libs-msvc/x86/ DESTINATION lib)
+            elseif(SFML_COMPILER_MSVC)
+                install(DIRECTORY extlibs/libs-msvc-universal/x86/ DESTINATION lib)
+            else()
+                install(DIRECTORY extlibs/libs-mingw/x86/ DESTINATION lib)
+            endif()
+        elseif(ARCH_64BITS)
+            install(DIRECTORY extlibs/bin/x64/ DESTINATION bin)
+            if(SFML_COMPILER_MSVC AND SFML_MSVC_VERSION LESS 14)
+                install(DIRECTORY extlibs/libs-msvc/x64/ DESTINATION lib)
+            elseif(SFML_COMPILER_MSVC)
+                install(DIRECTORY extlibs/libs-msvc-universal/x64/ DESTINATION lib)
+            else()
+                install(DIRECTORY extlibs/libs-mingw/x64/ DESTINATION lib)
+            endif()
         endif()
     endif()
 
@@ -486,17 +509,21 @@ elseif(SFML_OS_IOS)
         install(DIRECTORY "${CMAKE_BINARY_DIR}/lib/\$ENV{CONFIGURATION}/" DESTINATION lib${LIB_SUFFIX})
     endif()
 
-    # since the iOS libraries are built as static, we must install the SFML dependencies
-    # too so that the end user can easily link them to its final application
-    if(SFML_BUILD_GRAPHICS)
-        install(FILES extlibs/libs-ios/libfreetype.a extlibs/libs-ios/libjpeg.a DESTINATION lib)
+    if(NOT SFML_USE_SYSTEM_DEPS)
+        # since the iOS libraries are built as static, we must install the SFML dependencies
+        # too so that the end user can easily link them to its final application
+        if(SFML_BUILD_GRAPHICS)
+            install(FILES extlibs/libs-ios/libfreetype.a extlibs/libs-ios/libjpeg.a DESTINATION lib)
+        endif()
     endif()
 
 elseif(SFML_OS_ANDROID)
 
-    # install extlibs
-    install(DIRECTORY extlibs/libs-android/${ANDROID_ABI} DESTINATION extlibs/lib)
-    install(FILES extlibs/Android.mk DESTINATION extlibs)
+    if(NOT SFML_USE_SYSTEM_DEPS)
+        # install extlibs
+        install(DIRECTORY extlibs/libs-android/${ANDROID_ABI} DESTINATION extlibs/lib)
+        install(FILES extlibs/Android.mk DESTINATION extlibs)
+    endif()
 
     # install Android.mk so the NDK knows how to set up SFML
     install(FILES src/SFML/Android.mk DESTINATION .)

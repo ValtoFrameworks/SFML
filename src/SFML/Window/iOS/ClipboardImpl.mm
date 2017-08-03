@@ -22,37 +22,51 @@
 //
 ////////////////////////////////////////////////////////////
 
-#ifndef SFML_SFML_WINDOW_HPP
-#define SFML_SFML_WINDOW_HPP
-
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
+#include <SFML/Window/iOS/ClipboardImpl.hpp>
 
-#include <SFML/System.hpp>
-#include <SFML/Window/Clipboard.hpp>
-#include <SFML/Window/Context.hpp>
-#include <SFML/Window/ContextSettings.hpp>
-#include <SFML/Window/Cursor.hpp>
-#include <SFML/Window/Event.hpp>
-#include <SFML/Window/Joystick.hpp>
-#include <SFML/Window/Keyboard.hpp>
-#include <SFML/Window/Mouse.hpp>
-#include <SFML/Window/Sensor.hpp>
-#include <SFML/Window/Touch.hpp>
-#include <SFML/Window/VideoMode.hpp>
-#include <SFML/Window/Window.hpp>
-#include <SFML/Window/WindowHandle.hpp>
-#include <SFML/Window/WindowStyle.hpp>
+@import UIKit
 
-
-
-#endif // SFML_SFML_WINDOW_HPP
+namespace sf
+{
+namespace priv
+{
 
 ////////////////////////////////////////////////////////////
-/// \defgroup window Window module
-///
-/// Provides OpenGL-based windows, and abstractions for
-/// events and input handling.
-///
+String ClipboardImpl::getString()
+{
+    UIPasteboard* pboard = [UIPasteboard generalPasteboard];
+    if (pboard.hasStrings)
+    {
+        NSString* data = pboard.string
+
+        char const* utf8 = [data cStringUsingEncoding:NSUTF8StringEncoding];
+        NSUInteger length = [data lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+
+        return String::fromUtf8(utf8, utf8 + length);
+    }
+    else
+    {
+        return String();
+    }
+}
+
+
 ////////////////////////////////////////////////////////////
+void ClipboardImpl::setString(const String& text)
+{
+    std::basic_string<Uint8> utf8 = text.toUtf8();
+    NSString* data = [[NSString alloc] initWithBytes:utf8.data()
+                                              length:utf8.length()
+                                            encoding:NSUTF8StringEncoding];
+
+    UIPasteboard* pboard = [UIPasteboard generalPasteboard];
+    pboard.string = data;
+}
+
+} // namespace priv
+
+} // namespace sf
+

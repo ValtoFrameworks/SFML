@@ -25,7 +25,6 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Window/WindowStyle.hpp> // important to be included first (conflict with None)
 #include <SFML/Window/Unix/WindowImplX11.hpp>
 #include <SFML/Window/Unix/Display.hpp>
 #include <SFML/Window/Unix/InputImpl.hpp>
@@ -387,6 +386,7 @@ m_inputContext   (NULL),
 m_isExternal     (true),
 m_oldVideoMode   (0),
 m_hiddenCursor   (0),
+m_lastCursor     (None),
 m_keyRepeat      (true),
 m_previousSize   (-1, -1),
 m_useSizeHints   (false),
@@ -434,6 +434,7 @@ m_inputContext   (NULL),
 m_isExternal     (false),
 m_oldVideoMode   (0),
 m_hiddenCursor   (0),
+m_lastCursor     (None),
 m_keyRepeat      (true),
 m_previousSize   (-1, -1),
 m_useSizeHints   (false),
@@ -895,8 +896,16 @@ void WindowImplX11::setVisible(bool visible)
 ////////////////////////////////////////////////////////////
 void WindowImplX11::setMouseCursorVisible(bool visible)
 {
-    XDefineCursor(m_display, m_window, visible ? None : m_hiddenCursor);
+    XDefineCursor(m_display, m_window, visible ? m_lastCursor : m_hiddenCursor);
     XFlush(m_display);
+}
+
+
+////////////////////////////////////////////////////////////
+void WindowImplX11::setMouseCursor(const CursorImpl& cursor)
+{
+    m_lastCursor = cursor.m_cursor;
+    XDefineCursor(m_display, m_window, m_lastCursor);
 }
 
 
